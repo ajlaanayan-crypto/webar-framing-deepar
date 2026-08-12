@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CyberVision AR - DeepAR Web SDK & MediaPipe Gesture WebAR</title>
+  <meta name="description" content="A real-time single-page WebAR application combining DeepAR Web SDK 3D Face Filters with Google MediaPipe Hands framing gesture detection.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;600;800;900&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- MediaPipe Library CDNs -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <!-- DeepAR Web SDK CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/deepar@5.4.1/js/deepar.js" crossorigin="anonymous"></script>
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="theme-dark">
+  <div id="app" class="ar-app-container">
+    <!-- Top HUD Navigation Header -->
+    <header class="hud-header glass-panel">
+      <div class="brand-section">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <h1 class="brand-title">CYBER<span class="highlight">VISION</span> <span class="badge">DeepAR + MediaPipe WebAR</span></h1>
+      </div>
+
+      <div class="hud-status-bar">
+        <div class="status-chip" id="chip-fps">
+          <span class="dot"></span>
+          <span class="label">FPS:</span>
+          <span class="value" id="val-fps">0</span>
+        </div>
+        <div class="status-chip" id="chip-hands">
+          <span class="dot"></span>
+          <span class="label">HANDS:</span>
+          <span class="value" id="val-hands">0 / 2</span>
+        </div>
+        <div class="status-chip status-idle" id="chip-gesture">
+          <span class="pulse-ring"></span>
+          <span class="label">DEEPAR FACE EFFECT:</span>
+          <span class="value" id="val-gesture">MAKE FRAME GESTURE</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Viewport Area -->
+    <main class="viewport-wrapper">
+      <!-- Hidden Video Element for MediaPipe Capture -->
+      <video id="webcam-feed" playsinline class="mirrored"></video>
+      
+      <!-- DeepAR 3D Face Filter WebGL Canvas -->
+      <canvas id="deepar-canvas" class="mirrored"></canvas>
+
+      <!-- Overlaid MediaPipe AR Canvas -->
+      <canvas id="ar-canvas" class="mirrored"></canvas>
+
+      <!-- Welcome Overlay / Start Camera Screen -->
+      <div id="start-screen" class="glass-overlay">
+        <div class="start-card glass-panel glow-border">
+          <div class="hero-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
+          <h2>DeepAR Web SDK + MediaPipe Gesture</h2>
+          <p class="subtitle">MediaPipe Hand Tracking detects your 'Camera Frame' gesture to trigger DeepAR 3D Face Effects in real-time!</p>
+
+          <div class="gesture-guide">
+            <div class="guide-item">
+              <div class="guide-badge deepar-badge">DeepAR</div>
+              <span><strong>DeepAR Web SDK Engine:</strong> Powers 3D Face Filters (Aviators, Koala, Flowers, etc.).</span>
+            </div>
+            <div class="guide-item">
+              <div class="guide-badge anime-badge">L</div>
+              <span><strong>Camera Frame Gesture:</strong> Form an "L" shape frame with both hands to trigger DeepAR on your face!</span>
+            </div>
+            <div class="guide-item">
+              <div class="guide-badge quad-badge">◇</div>
+              <span><strong>Hand Quadrilateral:</strong> Dynamic AR tracking overlay stays anchored between finger tips.</span>
+            </div>
+          </div>
+
+          <button id="btn-start-camera" class="btn btn-primary glow-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>START DEEPAR & CAMERA</span>
+          </button>
+          
+          <div id="camera-error" class="error-banner hidden"></div>
+        </div>
+      </div>
+
+      <!-- AR HUD Reticle Info Overlay -->
+      <div id="hud-frame-info" class="hud-floating-info hidden">
+        <div class="hud-metric">
+          <span class="hud-key">DEEPAR EFFECT</span>
+          <span class="hud-val highlight" id="hud-val-effect">AVIATORS 🕶️</span>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-key">GESTURE STATUS</span>
+          <span class="hud-val" id="hud-val-status">FRAME LOCKED</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Bottom AR Dock Controls -->
+    <footer class="hud-dock glass-panel">
+      <div class="dock-group">
+        <button id="btn-toggle-camera" class="btn btn-icon" title="Toggle Camera On/Off">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 7l-7 5 7 5V7z"/>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          </svg>
+        </button>
+
+        <button id="btn-toggle-mirror" class="btn btn-icon active" title="Toggle Mirroring">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 1l4 4-4 4"/>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+            <path d="M7 23l-4-4 4-4"/>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+        </button>
+
+        <button id="btn-toggle-skeleton" class="btn btn-icon active" title="Toggle Hand Skeleton">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/>
+            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6"/>
+            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+            <path d="M18 8a2 2 0 0 1 2 2v6a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-1.5"/>
+          </svg>
+        </button>
+
+        <button id="btn-audio-toggle" class="btn btn-icon active" title="Toggle Sound FX">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="dock-separator"></div>
+
+      <!-- DeepAR 3D Face Effect Selector -->
+      <div class="dock-group filter-selector">
+        <label class="dock-label">DEEPAR 3D FACE EFFECT:</label>
+        <div class="filter-buttons">
+          <button class="btn btn-tab active" data-effect="aviators">AVIATORS 🕶️</button>
+          <button class="btn btn-tab" data-effect="koala">KOALA 🐨</button>
+          <button class="btn btn-tab" data-effect="flowers">FLOWERS 🌸</button>
+          <button class="btn btn-tab" data-effect="dalmatians">DALMATIAN 🐶</button>
+          <button class="btn btn-tab" data-effect="slash">SLASH ⚡</button>
+        </div>
+      </div>
+
+      <div class="dock-separator"></div>
+
+      <div class="dock-group">
+        <button id="btn-snap-photo" class="btn btn-accent glow-btn-cyan" disabled title="Capture AR Frame Photo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <span>SNAP DEEPAR PHOTO</span>
+        </button>
+      </div>
+    </footer>
+
+    <!-- Photo Gallery / Preview Modal -->
+    <div id="modal-snapshot" class="modal-overlay hidden">
+      <div class="modal-card glass-panel glow-border">
+        <div class="modal-header">
+          <h3><span class="highlight">DEEPAR SNAP</span> CAPTURED</h3>
+          <button id="btn-close-modal" class="btn-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <img id="snapshot-img-preview" alt="AR Snapshot preview">
+        </div>
+        <div class="modal-footer">
+          <a id="btn-download-snap" href="#" download="deepar-mediapipe-ar-snap.png" class="btn btn-primary glow-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>DOWNLOAD PHOTO</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/audio.js"></script>
+  <script src="js/deeparManager.js"></script>
+  <script src="js/handTracker.js"></script>
+  <script src="js/arRenderer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
