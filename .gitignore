@@ -1,0 +1,8 @@
+# Generated Git Ignore
+*.env
+*.log
+.DS_Store
+.env
+.env.*.local
+.env.local
+Thumbs.db
